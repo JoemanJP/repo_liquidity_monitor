@@ -39,6 +39,9 @@ from telegram_client import (
 
 from crypto_integration import build_btc_eth_section  # 串接 BTC / ETH 宏觀策略區
 
+# 是否同時發送短版與長版
+SEND_BOTH_TEXTS = True  # True = 發短版摘要 + 完整報告；False = 只發完整報告
+
 # 歷史紀錄檔案，用來算 7天 / 30天 趨勢與週期變化
 HISTORY_FILE = Path(__file__).resolve().parent / "liquidity_history.json"
 
@@ -542,6 +545,39 @@ def build_trend_sections(today_snapshot: dict, history: list):
 
 
 # ---------------------------------------------------------
+# 短版摘要訊息組裝
+# ---------------------------------------------------------
+def build_brief_message(
+    summary_line: str,
+    cycle_line: str,
+    escape_line: str,
+    risk_line: str,
+    position_line: str,
+    trend_7_lines: list,
+    trend_30_lines: list,
+    cycle_shift_line: str,
+) -> str:
+    """
+    建立發到 Telegram 的短版摘要訊息
+    """
+    brief_lines = []
+    brief_lines.append("📌【短版摘要】")
+    brief_lines.append("")
+    brief_lines.append(summary_line)
+    brief_lines.append(cycle_line)
+    brief_lines.append(escape_line)
+    brief_lines.append(risk_line)
+    brief_lines.append(position_line)
+    brief_lines.append("")
+    brief_lines.extend(trend_7_lines)
+    brief_lines.append("")
+    brief_lines.extend(trend_30_lines)
+    brief_lines.append("")
+    brief_lines.append(cycle_shift_line)
+    return "\n".join(brief_lines)
+
+
+# ---------------------------------------------------------
 # 主程式：組合所有文字 + 圖片
 # ---------------------------------------------------------
 def run_liquidity_dashboard() -> None:
@@ -689,9 +725,29 @@ def run_liquidity_dashboard() -> None:
         except CDSDataError:
             pass
 
+        # --- 組裝完整長版文字 ---
+        full_text = "\n".join(lines)
+
+        # --- 組裝短版摘要 ---
+        brief_text = build_brief_message(
+            summary_line,
+            cycle_line,
+            escape_line,
+            risk_line,
+            position_line,
+            trend_7_lines,
+            trend_30_lines,
+            cycle_shift_line,
+        )
+
         # --- 發送 Telegram 文字 ---
-        text = "\n".join(lines)
-        send_telegram_message(text)
+        if SEND_BOTH_TEXTS:
+            send_telegram_message(brief_text)
+            send_telegram_message("📚【完整報告】\n\n" + full_text)
+        else:
+            # 如果之後只想要其中一種，可在這裡調整
+            send_telegram_message(full_text)
+
         print("[ok] 流動性 Dashboard 文字報告已發送到 Telegram")
 
         # --- 發送圖表 ---
